@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Авториза</title>
+</head>
+<body>
+
+    <h1>Авториза</h1>
+
+    {% if authenticated %}
+        <p>Статус: <b>Авторизован</b></p>
+        <p>Имя: {{ user.name or user.given_name or user.preferred_username or '—' }}</p>
+        <p>Email: {{ user.email or '—' }}</p>
+        <br>
+    
+        <h3>Токены</h3>
+        <p><b>access_token:</b></p>
+        <div style="word-break: break-all;">{{ token.access_token }}</div>
+        <br>
+        <p><b>id_token:</b></p>
+        <div style="word-break: break-all;">{{ token.id_token }}</div>
+        <br>
+        <p><b>refresh_token:</b></p>
+        <div style="word-break: break-all;">{{ token.refresh_token or '—' }}</div>
+        <br>
+
+        <h3>ID Token Payload</h3>
+        <pre>{% if id_token_payload %}{{ id_token_payload | tojson(indent=2) }}{% else %}—{% endif %}</pre>
+        <br>
+
+        <h3>Access Token Payload</h3>
+        <pre>{% if access_token_payload %}{{ access_token_payload | tojson(indent=2) }}{% else %}—{% endif %}</pre>
+        <br>
+
+        <h3>UserInfo</h3>
+        <pre>{% if user %}{{ user | tojson(indent=2) }}{% else %}—{% endif %}</pre>
+        <br>
+
+        <p>Получено: {{ login_time or '—' }}</p>
+        <br>
+
+        <a href="/refresh"><button>Обновить токены</button></a>
+        <a href="/logout"><button>Выход</button></a>
+
+    {% else %}
+        <p>Статус: <b>Не авторизован</b></p>
+        <br>
+        <a href="/login"><button>Войти</button></a>
+    {% endif %}
+
+</body>
+</html>
