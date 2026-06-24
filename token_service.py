@@ -1,11 +1,25 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import jwt
 from fastapi import Request
 
-from auth_storage import save_auth_data
+from auth_storage import clear_auth_data, save_auth_data
 from oauth_client import oauth
+
+
+def get_refresh_expires_at(token: dict) -> str | None:
+    if "refresh_expires_in" in token:
+        return (datetime.now(timezone.utc) + timedelta(seconds=token["refresh_expires_in"])).isoformat()
+
+    # декодируем refresh_token как JWT
+    rt = token.get("refresh_token")
+    payload = decode_token_payload(rt)
+    if payload and "exp" in payload:
+        return datetime.fromtimestamp(payload["exp"], tz=timezone.utc).isoformat()
+
+    # иначе
+    return None
 
 
 # декодировка JWT без проверки подписи
@@ -43,15 +57,15 @@ async def refresh_tokens(request: Request) -> bool:
 
     request.session["token"] = new_token
     request.session["access_token_expires_at"] = (
-        datetime.now() + timedelta(seconds=new_token["expires_in"])
+        datetime.now(timezone.utc) + timedelta(seconds=new_token["expires_in"])
     ).isoformat()
 
     if "refresh_expires_in" in new_token:
         request.session["refresh_token_expires_at"] = (
-            datetime.now() + timedelta(seconds=new_token["refresh_expires_in"])
+            datetime.now(timezone.utc) + timedelta(seconds=new_token["refresh_expires_in"])
         ).isoformat()
-    else:  # очищаем время жизни токена
-        request.session["refresh_token_expires_at"] = None
+    else:
+        request.session["refresh_token_expires_at"] = get_refresh_expires_at(new_token)
 
     request.session["last_refresh_time"] = datetime.now().isoformat()
 
@@ -88,6 +102,20 @@ async def refresh_tokens(request: Request) -> bool:
 
 
 async def check_token(request: Request) -> None:
+    # проверка refresh_token. если истёк - выходим из аккаунта
+    refresh_expires_at = request.session.get("refresh_token_expires_at")
+
+    if refresh_expires_at:
+        try:
+            refresh_dt = datetime.fromisoformat(refresh_expires_at)
+            if datetime.now(refresh_dt.tzinfo) >= refresh_dt:
+                print("[AUTO REFRESH] refresh_token expired: logout")
+                request.session.clear()
+                clear_auth_data()
+                return
+        except Exception as e:
+            print(f"[CHECK TOKEN ERROR] refresh_token parse: {e}")
+
     # проверка access_token:
     expires_at = request.session.get("access_token_expires_at")
 

@@ -13,17 +13,6 @@
         <p>Имя: {{ user.name or user.given_name or user.preferred_username or '—' }}</p>
         <p>Email: {{ user.email or '—' }}</p>
         <br>
-    
-        <h3>Токены</h3>
-        <p><b>access_token:</b></p>
-        <div style="word-break: break-all;">{{ token.access_token }}</div>
-        <br>
-        <p><b>id_token:</b></p>
-        <div style="word-break: break-all;">{{ token.id_token }}</div>
-        <br>
-        <p><b>refresh_token:</b></p>
-        <div style="word-break: break-all;">{{ token.refresh_token or '—' }}</div>
-        <br>
 
         <h3>ID Token Payload</h3>
         <pre>{% if id_token_payload %}{{ id_token_payload | tojson(indent=2) }}{% else %}—{% endif %}</pre>

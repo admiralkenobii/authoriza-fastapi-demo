@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from auth_storage import clear_auth_data, save_auth_data
 from oauth_client import oauth
 from session_service import restore_session
-from token_service import check_token, decode_token_payload, refresh_tokens
+from token_service import check_token, decode_token_payload, refresh_tokens, get_refresh_expires_at
 
 
 router = APIRouter()
@@ -39,7 +39,6 @@ async def home(request: Request):
         name="index.html",
         context={
             "authenticated": token is not None,
-            "token": token,
             "user": user,
             "id_token_payload": id_token_payload,
             "access_token_payload": access_token_payload,
@@ -56,8 +55,7 @@ async def login(request: Request):
     # Authlib сгенерирует PKCE и перенаправит
     return await oauth.authoriza.authorize_redirect(
         request,
-        redirect_uri,
-        prompt="consent",
+        redirect_uri
     )
 
 
@@ -105,15 +103,16 @@ async def callback(request: Request):
         request.session["login_time"] = datetime.now().isoformat()
         # время истечения токена
         request.session["access_token_expires_at"] = (
-            datetime.now() + timedelta(seconds=token["expires_in"])
+            datetime.now(timezone.utc) + timedelta(seconds=token["expires_in"])
         ).isoformat()
 
-        if "refresh_expires_in" in token:
+        # пытаемся достать срок жизни refresh_token
+        if "refresh_expires_in" in token:  # если в самом токене нет
             request.session["refresh_token_expires_at"] = (
-                datetime.now() + timedelta(seconds=token["refresh_expires_in"])
+                datetime.now(timezone.utc) + timedelta(seconds=token["refresh_expires_in"])
             ).isoformat()
-        else:
-            request.session["refresh_token_expires_at"] = None
+        else:  # то декодируем как JWT
+            request.session["refresh_token_expires_at"] = get_refresh_expires_at(token)
 
         # сохранение данных после логина
         save_auth_data(
@@ -165,7 +164,6 @@ async def status(request: Request):
 
 @router.get("/refresh")
 async def refresh(request: Request):
-    await check_token(request)
     try:
         ok = await refresh_tokens(request)
 
